@@ -3,6 +3,7 @@
 <head>
   <title>Tabungan App</title>
   <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     body {
@@ -203,70 +204,82 @@ td {
 
 <body>
 
-<div id="app" class="app">
-  <h2>Tabungan GEN-WARIS</h2>
+<div id="app" class="dashboard">
 
-<div class="user-box">
-  <h3>Manajemen User</h3>
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <h3>Menu</h3>
+    <button @click="page='dashboard'">Dashboard</button>
+    <button @click="page='user'">User</button>
+    <button @click="page='transaksi'">Tabungan</button>
+  </div>
 
-  <select v-model="user_id" @change="cekTambahUser">
-  <option disabled value="">Pilih User</option>
+  <!-- CONTENT -->
+  <div class="content">
 
-  <option v-for="u in users" :value="u.id">
-    {{ u.nama }}
-  </option>
+    <!-- DASHBOARD -->
+    <div v-if="page==='dashboard'">
+      <h2>Dashboard</h2>
 
-  <option value="tambah">+ Tambah User</option>
-</select>
+      <div class="card">
+        <p>Saldo Masuk: Rp {{ totalMasuk }}</p>
+        <p>Saldo Keluar: Rp {{ totalKeluar }}</p>
+        <p>Total Saldo: Rp {{ saldo }}</p>
+      </div>
+    </div>
 
-  <ul>
-    <li v-for="u in users" :key="u.id">
-  <input v-model="u.nama">
-  <button class="btn-update" @click="updateUser(u)">💾</button>
-  <button class="btn-hapus-user" @click="hapusUser(u.id)">🗑️</button>
-</li>
-  </ul>
+    <!-- USER -->
+    <div v-if="page==='user'">
+      <h2>Manajemen User</h2>
+
+      <input v-model="namaBaru" placeholder="Nama user">
+      <button @click="tambahUser">Tambah</button>
+
+      <ul>
+        <li v-for="u in users">
+          <input v-model="u.nama">
+          <button @click="updateUser(u)">💾</button>
+          <button @click="hapusUser(u.id)">🗑️</button>
+        </li>
+      </ul>
+    </div>
+
+    <!-- TABUNGAN -->
+    <div v-if="page==='transaksi'">
+      <h2>Transaksi</h2>
+
+      <select v-model="user_id">
+        <option v-for="u in users" :value="u.id">
+          {{ u.nama }}
+        </option>
+      </select>
+
+      <input v-model="jumlah" placeholder="Jumlah">
+      <input v-model="keterangan" placeholder="Keterangan">
+
+      <button @click="tabung">Tabung</button>
+      <button @click="tarik">Tarik</button>
+
+      <table>
+        <tr>
+          <th>Tipe</th>
+          <th>Jumlah</th>
+          <th>Keterangan</th>
+          <th>Tanggal</th>
+        </tr>
+
+        <tr v-for="r in riwayat">
+          <td>{{ r.tipe }}</td>
+          <td>{{ r.jumlah }}</td>
+          <td>{{ r.keterangan }}</td>
+          <td>{{ formatTanggal(r.created_at) }}</td>
+        </tr>
+      </table>
+    </div>
+
+  </div>
 </div>
 
-  <input v-model="user_id" placeholder="User ID">
-  <input v-model="jumlah" placeholder="Jumlah">
-
-  <div>
-    <button type="button" class="btn-tabung" @click="tabung">Tabung</button>
-    <button type="button" class="btn-tarik" @click="tarik">Tarik</button>
-  </div>
-
-  <div class="saldo-box">
-    Saldo: Rp {{ saldo }}
-  </div>
-
-  <h4>Riwayat</h4>
-
-  <table>
-    <tr>
-      <th>Tipe</th>
-      <th>Jumlah</th>
-      <th>Tanggal</th>
-      <th>Aksi</th>
-    </tr>
-    <tr v-for="item in riwayat" :key="item.id">
-  <td :class="item.tipe">{{ item.tipe }}</td>
-  <td>
-  <span v-if="editId !== item.id">{{ item.jumlah }}</span>
-
-  <input v-else v-model="editJumlah" style="width:70px">
-
-  <button v-if="editId === item.id"
-  class="btn-simpan"
-  @click="simpanEdit(item)">💾</button>
-</td>
-  <td>{{ formatTanggal(item.created_at) }}</td>
-  <td>
-  <button class="btn-edit" @click="editTransaksi(item)">✏️</button>
-  <button class="btn-hapus" @click="hapus(item.id)">🗑️</button>
-</td>
- </tr>
-  </table>
 </div>
 
 <script>
@@ -283,7 +296,12 @@ Vue.createApp({
       users: [],
       namaBaru: "",
       editId: null,
-      editJumlah: ""
+      editJumlah: "",
+      page: "dashboard",
+      keterangan: "",
+      totalMasuk: 0,
+      totalKeluar: 0,
+      keterangan: ""
     }
   },
   methods: {
@@ -293,7 +311,8 @@ Vue.createApp({
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
       user_id: this.user_id,
-      jumlah: this.jumlah
+      jumlah: this.jumlah,
+      keterangan: this.keterangan
     })
   })
 
@@ -313,7 +332,8 @@ Vue.createApp({
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
       user_id: this.user_id,
-      jumlah: this.jumlah
+      jumlah: this.jumlah,
+      keterangan: thisketerangan
     })
   })
 
@@ -335,6 +355,18 @@ Vue.createApp({
     async getRiwayat() {
       const res = await fetch(API + "/riwayat/" + this.user_id)
       this.riwayat = await res.json()
+      this.totalMasuk = 0
+this.totalKeluar = 0
+
+this.riwayat.forEach(r => {
+  if (r.tipe === "masuk") {
+    this.totalMasuk += Number(r.jumlah)
+  } else {
+    this.totalKeluar += Number(r.jumlah)
+  }
+})
+
+      this.renderChart() //update grafik
     },
     async hapus(id) {
   try {
@@ -357,6 +389,36 @@ Vue.createApp({
   }
 },
 
+renderChart() {
+  const ctx = document.getElementById('chartSaldo')
+
+  if (!ctx) return
+
+  if (this.chart) {
+    this.chart.destroy()
+  }
+
+  let masuk = 0
+  let keluar = 0
+
+  this.riwayat.forEach(r => {
+    if (r.tipe === "masuk") masuk += Number(r.jumlah)
+    else keluar += Number(r.jumlah)
+  })
+
+  this.chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Masuk', 'Keluar'],
+      datasets: [{
+        label: 'Total',
+        data: [masuk, keluar],
+        backgroundColor: ['green', 'orange']
+      }]
+    }
+  })
+},
+
 async cekTambahUser() {
   if (this.user_id === "tambah") {
     const nama = prompt("Masukkan nama user baru:")
@@ -375,15 +437,6 @@ async cekTambahUser() {
     await this.getUsers()
 
     this.user_id = this.users[0]?.id
-  }
-},
-
-watch: {
-  user_id(val) {
-    if (val && val !== "tambah") {
-      this.cekSaldo()
-      this.getRiwayat()
-    }
   }
 },
 
@@ -463,7 +516,17 @@ async simpanEdit(item) {
 mounted() {
   console.log("APP JALAN")
   this.getUsers()
-}
+},
+
+watch: {
+  user_id(val) {
+    if (val && val !== "tambah") {
+      this.cekSaldo()
+      this.getRiwayat()
+    }
+  }
+},
+
 }).mount("#app")
 </script>
 
