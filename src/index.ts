@@ -72,23 +72,23 @@ app.post('/tabung', async (c) => {
   const body = await c.req.json()
   const user_id = body.user_id
   const jumlah = Number(body.jumlah)
+  const keterangan = body.keterangan
 
   if (!user_id || !jumlah || jumlah <= 0) {
     return c.json({ error: 'Data tidak valid' }, 400)
   }
 
-  // cek user ada atau tidak
-const user = await c.env.DB.prepare(
-  "SELECT * FROM users WHERE id = ?"
-).bind(user_id).first()
+  const user = await c.env.DB.prepare(
+    "SELECT * FROM users WHERE id = ?"
+  ).bind(user_id).first()
 
-if (!user) {
-  return c.json({ error: "User tidak ditemukan" }, 400)
-}
+  if (!user) {
+    return c.json({ error: "User tidak ditemukan" }, 400)
+  }
 
   await c.env.DB.prepare(
-    "INSERT INTO transaksi (user_id, jumlah, tipe, created_at) VALUES (?, ?, 'masuk', datetime('now','+7 hours'))"
-  ).bind(user_id, jumlah).run()
+    "INSERT INTO transaksi (user_id, jumlah, tipe, keterangan, created_at) VALUES (?, ?, 'masuk', ?, datetime('now','+7 hours'))"
+  ).bind(user_id, jumlah, keterangan).run()
 
   return c.json({ message: 'Berhasil menabung' })
 })
@@ -99,12 +99,12 @@ app.post('/tarik', async (c) => {
   const body = await c.req.json()
   const user_id = body.user_id
   const jumlah = Number(body.jumlah)
+  const keterangan = body.keterangan
 
   if (!user_id || !jumlah || jumlah <= 0) {
     return c.json({ error: "Data tidak valid" }, 400)
   }
 
-  //cek user
   const user = await c.env.DB.prepare(
     "SELECT * FROM users WHERE id = ?"
   ).bind(user_id).first()
@@ -113,9 +113,8 @@ app.post('/tarik', async (c) => {
     return c.json({ error: "User tidak ditemukan" }, 400)
   }
 
-  //hitung saldo
   const saldoData = await c.env.DB.prepare(`
-    SELECT 
+    SELECT  
       COALESCE(SUM(CASE WHEN tipe='masuk' THEN jumlah ELSE 0 END),0) -
       COALESCE(SUM(CASE WHEN tipe='keluar' THEN jumlah ELSE 0 END),0)
       AS saldo
@@ -124,15 +123,14 @@ app.post('/tarik', async (c) => {
   `).bind(user_id).first()
 
   const saldo = Number(saldoData?.saldo ?? 0)
-//validasi saldo
-if (jumlah > saldo) {
-  return c.json({ error: "Saldo tidak cukup" }, 400)
-}
 
-  //kalau aman, lanjut tarik
+  if (jumlah > saldo) {
+    return c.json({ error: "Saldo tidak cukup" }, 400)
+  }
+
   await c.env.DB.prepare(
-    "INSERT INTO transaksi (user_id, jumlah, tipe, created_at) VALUES (?, ?, 'keluar', datetime('now','+7 hours'))"
-  ).bind(user_id, jumlah).run()
+    "INSERT INTO transaksi (user_id, jumlah, tipe, keterangan, created_at) VALUES (?, ?, 'keluar', ?, datetime('now','+7 hours'))"
+  ).bind(user_id, jumlah, keterangan).run()
 
   return c.json({ message: "Berhasil tarik" })
 })
@@ -181,10 +179,11 @@ app.put('/transaksi/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const body = await c.req.json()
   const jumlah = Number(body.jumlah)
+  const keterangan = body.keterangan
 
   await c.env.DB.prepare(
-    "UPDATE transaksi SET jumlah = ? WHERE id = ?"
-  ).bind(jumlah, id).run()
+    "UPDATE transaksi SET jumlah = ?, keterangan = ? WHERE id = ?"
+  ).bind(jumlah, keterangan, id).run()
 
   return c.json({ message: "Berhasil update" })
 })
